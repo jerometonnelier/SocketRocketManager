@@ -8,19 +8,19 @@ public protocol SocketManagerDelegate: class {
     func didReceiveError(_ error: Error?)
 }
 
-typealias SocketRoute = String
+public typealias SocketRoute = String
 /// In order to handle custom message, please sublclass SocketMessage and use your own data
-public class SocketBaseMessage: Codable {
+open class SocketBaseMessage: Codable {
 }
 
-public class ATASocketMessage: SocketBaseMessage {
-    let id: Int
-    let route: SocketRoute
+open class ATASocketMessage: SocketBaseMessage {
+    public let id: Int
+    public let method: SocketRoute
     
-    init(id: Int,
+    public init(id: Int,
          route: SocketRoute) {
         self.id = id
-        self.route = route
+        self.method = route
         super.init()
     }
     
@@ -29,18 +29,18 @@ public class ATASocketMessage: SocketBaseMessage {
         case route
     }
     
-    required init(from decoder: Decoder) throws {
+    required public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         //mandatory
         id = try container.decode(Int.self, forKey: .id)
-        route = try container.decode(String.self, forKey: .route)
+        method = try container.decode(String.self, forKey: .route)
         try super.init(from: decoder)
     }
     
-    public override func encode(to encoder: Encoder) throws {
+    open override func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
-        try container.encode(route, forKey: .route)
+        try container.encode(method, forKey: .route)
     }
 }
 
@@ -59,13 +59,16 @@ public class SocketManager {
          delegate: SocketManagerDelegate,
          handledTypes: [SocketBaseMessage.Type]) {
         var request = URLRequest(url: root)
-        request.timeoutInterval = 5
+        request.timeoutInterval = 30
         socket = WebSocket(request: request)
         socket.delegate = self
-        socket.connect()
         self.clientIdentifier = clientIdentifier
         self.delegate = delegate
         self.handledTypes = handledTypes
+    }
+    
+    public func connect() {
+        socket.connect()
     }
     
     private let decoder: JSONDecoder = JSONDecoder()

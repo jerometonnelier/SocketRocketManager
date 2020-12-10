@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 50;
+	objectVersion = 52;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -13,6 +13,7 @@
 		C6A460B52582640A0071D557 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = C6A460B32582640A0071D557 /* Main.storyboard */; };
 		C6A460B72582640D0071D557 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C6A460B62582640D0071D557 /* Assets.xcassets */; };
 		C6A460BA2582640D0071D557 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = C6A460B82582640D0071D557 /* LaunchScreen.storyboard */; };
+		C6A460C4258264B30071D557 /* SocketManager in Frameworks */ = {isa = PBXBuildFile; productRef = C6A460C3258264B30071D557 /* SocketManager */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -24,6 +25,7 @@
 		C6A460B62582640D0071D557 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C6A460B92582640D0071D557 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		C6A460BB2582640D0071D557 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		C6A460C6258264CA0071D557 /* SocketManager */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SocketManager; path = ..; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -31,6 +33,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C6A460C4258264B30071D557 /* SocketManager in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -40,6 +43,7 @@
 		C6A460A12582640A0071D557 = {
 			isa = PBXGroup;
 			children = (
+				C6A460C6258264CA0071D557 /* SocketManager */,
 				C6A460AC2582640A0071D557 /* example */,
 				C6A460AB2582640A0071D557 /* Products */,
 			);
@@ -83,6 +87,9 @@
 			dependencies = (
 			);
 			name = example;
+			packageProductDependencies = (
+				C6A460C3258264B30071D557 /* SocketManager */,
+			);
 			productName = example;
 			productReference = C6A460AA2582640A0071D557 /* example.app */;
 			productType = "com.apple.product-type.application";
@@ -110,6 +117,9 @@
 				Base,
 			);
 			mainGroup = C6A460A12582640A0071D557;
+			packageReferences = (
+				C6A460C2258264B30071D557 /* XCRemoteSwiftPackageReference "SocketManager" */,
+			);
 			productRefGroup = C6A460AB2582640A0071D557 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -341,6 +351,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C6A460C2258264B30071D557 /* XCRemoteSwiftPackageReference "SocketManager" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/jerometonnelier/SocketManager";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C6A460C3258264B30071D557 /* SocketManager */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C6A460C2258264B30071D557 /* XCRemoteSwiftPackageReference "SocketManager" */;
+			productName = SocketManager;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C6A460A22582640A0071D557 /* Project object */;
 }
