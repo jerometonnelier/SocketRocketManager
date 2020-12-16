@@ -16,7 +16,7 @@ class ViewController: UIViewController {
         super.viewDidLoad()
         // Do any additional setup after loading the view.
 //        socketManager = SocketManager(root: URL(string: "wss://echo.websocket.org")!,
-        socketManager = SocketManager(root: URL(string: "ws://192.168.1.22:8080")!,
+        socketManager = SocketManager(root: URL(string: "ws://192.168.1.22:443")!,
                                       clientIdentifier: UUID(),
                                       delegate: self,
                                       handledTypes: [TestSocketMessage.self])

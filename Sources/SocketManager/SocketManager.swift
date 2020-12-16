@@ -26,7 +26,7 @@ open class ATASocketMessage: SocketBaseMessage {
     
     enum CodingKeys: String, CodingKey {
         case id
-        case route
+        case route = "method"
     }
     
     required public init(from decoder: Decoder) throws {
@@ -62,6 +62,7 @@ public class SocketManager {
         request.timeoutInterval = 30
         socket = WebSocket(request: request)
         socket.delegate = self
+        encoder.outputFormatting = .prettyPrinted
         self.clientIdentifier = clientIdentifier
         self.delegate = delegate
         self.handledTypes = handledTypes
@@ -86,7 +87,8 @@ public class SocketManager {
     }
     
     public func send(_ message: SocketBaseMessage, completion: (() -> Void)? = nil) {
-        guard let data = try? encoder.encode(message) else { return }
+        guard let data = try? encoder.encode(message),
+              let string = String(data: data, encoding: .utf8) else { return }
         socket.write(data: data, completion: completion)
     }
 }
