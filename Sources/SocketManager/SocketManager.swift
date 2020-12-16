@@ -61,7 +61,7 @@ public class SocketManager {
     private var clientIdentifier: UUID!
     private weak var delegate: SocketManagerDelegate!
     private var handledTypes: [SocketBaseMessage.Type] = []
-    private(set) var isConnected: Bool = false
+    private(set) public var isConnected: Bool = false
     
     public init(root: URL,
          clientIdentifier: UUID,
