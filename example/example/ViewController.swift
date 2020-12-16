@@ -19,7 +19,7 @@ class ViewController: UIViewController {
         socketManager = SocketManager(root: URL(string: "ws://192.168.1.22:443")!,
                                       clientIdentifier: UUID(),
                                       delegate: self,
-                                      handledTypes: [TestSocketMessage.self])
+                                      handledTypes: [TestSocketMessage.self, RideSocketMessage.self])
     }
 
     @IBAction func connect(_ sender: Any) {
@@ -30,6 +30,43 @@ class ViewController: UIViewController {
         socketManager.send(TestSocketMessage(data: ["test" : "My Test"])) {
             
         }
+    }
+}
+
+struct Ride: Codable, Hashable {
+    static func == (lhs: Ride, rhs: Ride) -> Bool {
+        return lhs.hashValue == rhs.hashValue
+    }
+    let id: String
+    let date: String
+    let validUntil: String
+    let isImmediate: Bool
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+}
+
+
+class RideSocketMessage: ATASocketMessage {
+    var ride: Ride!
+    override var checkMethod: SocketRoute { "broadcast" }
+    
+    enum CodingKeys: String, CodingKey {
+        case ride = "params"
+    }
+    
+    required init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        //mandatory
+        ride = try container.decode(Ride.self, forKey: .ride)
+        try super.init(from: decoder)
+    }
+    
+    override func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(ride, forKey: .ride)
+        try super.encode(to: encoder)
     }
 }
 
@@ -72,7 +109,7 @@ extension ViewController: SocketManagerDelegate {
     }
     
     func didReceiveMessage(_ socketManager: SocketManager, message: SocketBaseMessage) {
-        
+        print(message)
     }
     
     func didReceiveError(_ error: Error?) {

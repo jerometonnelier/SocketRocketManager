@@ -16,6 +16,8 @@ open class SocketBaseMessage: Codable {
 open class ATASocketMessage: SocketBaseMessage {
     public let id: Int
     public let method: SocketRoute
+    // use this to check the decoded method and test again the decoded value
+    open var checkMethod: SocketRoute? { nil }
     
     public init(id: Int,
          route: SocketRoute) {
@@ -35,6 +37,12 @@ open class ATASocketMessage: SocketBaseMessage {
         id = try container.decode(Int.self, forKey: .id)
         method = try container.decode(String.self, forKey: .route)
         try super.init(from: decoder)
+        
+        // check that the decoded values matches the expected value if provided
+        if let route = checkMethod,
+           route != method {
+            throw SocketManager.SMError.invalidRoute
+        }
     }
     
     open override func encode(to encoder: Encoder) throws {
@@ -47,6 +55,7 @@ open class ATASocketMessage: SocketBaseMessage {
 public class SocketManager {
     enum SMError: Error {
         case invalidUrl
+        case invalidRoute
     }
     private var socket: WebSocket!
     private var clientIdentifier: UUID!
@@ -72,6 +81,11 @@ public class SocketManager {
         socket.connect()
     }
     
+    public func diconnect() {
+        socket.disconnect()
+    }
+    
+    // send/receive messages
     private let decoder: JSONDecoder = JSONDecoder()
     private let encoder: JSONEncoder = JSONEncoder()
     func handle(_ data: Data) {
@@ -82,13 +96,8 @@ public class SocketManager {
         }
     }
     
-    public func diconnect() {
-        socket.disconnect()
-    }
-    
     public func send(_ message: SocketBaseMessage, completion: (() -> Void)? = nil) {
-        guard let data = try? encoder.encode(message),
-              let string = String(data: data, encoding: .utf8) else { return }
+        guard let data = try? encoder.encode(message) else { return }
         socket.write(data: data, completion: completion)
     }
 }
