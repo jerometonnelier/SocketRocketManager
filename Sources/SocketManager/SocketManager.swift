@@ -1,6 +1,7 @@
 import UIKit
 import Starscream
 
+// MARK: - Protocols
 public protocol SocketManagerDelegate: class {
     func socketDidConnect(_ socketManager: SocketManager)
     func socketDidDisconnect(_ socketManager: SocketManager, reason: String, code: UInt16)
@@ -19,10 +20,36 @@ public struct ErrorMessage: Codable {
     public let errorMessage: String
 }
 
-open class ATASocketMessage: SocketBaseMessage {
+// MARK: - Messages
+open class ATAReadSocketMessage: ATAWriteSocketMessage {
+    public var error: ErrorMessage
+    
+    public override init(id: Int,
+         route: SocketRoute) {
+        self.error = ErrorMessage(errorCode: 0, errorMessage: "")
+        super.init(id: id, route: route)
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case error = "status"
+    }
+    
+    required public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        error = try container.decode(ErrorMessage.self, forKey: .error)
+        try super.init(from: decoder)
+    }
+    
+    open override func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(error, forKey: .error)
+        try super.encode(to: encoder)
+    }
+}
+
+open class ATAWriteSocketMessage: SocketBaseMessage {
     public let id: Int
     public let method: SocketRoute
-    public var error: ErrorMessage?
     // use this to check the decoded method and test again the decoded value
     open var checkMethod: SocketRoute? { nil }
     
@@ -36,7 +63,6 @@ open class ATASocketMessage: SocketBaseMessage {
     enum CodingKeys: String, CodingKey {
         case id
         case route = "method"
-        case error = "status"
     }
     
     required public init(from decoder: Decoder) throws {
@@ -44,7 +70,6 @@ open class ATASocketMessage: SocketBaseMessage {
         //mandatory
         id = try container.decode(Int.self, forKey: .id)
         method = try container.decode(String.self, forKey: .route)
-        error = try container.decodeIfPresent(ErrorMessage.self, forKey: .error)
         try super.init(from: decoder)
         
         // check that the decoded values matches the expected value if provided
@@ -58,10 +83,10 @@ open class ATASocketMessage: SocketBaseMessage {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
         try container.encode(method, forKey: .route)
-        try container.encode(error, forKey: .error)
     }
 }
 
+// MARK: - SocketManager
 public class SocketManager {
     enum SMError: Error {
         case invalidUrl
@@ -101,9 +126,9 @@ public class SocketManager {
     func handle(_ data: Data) {
         handledTypes.forEach { SocketType in
             if let message = try? decoder.decode(SocketType, from: data) {
-                if let ataMessage = message as? ATASocketMessage,
-                   let error = ataMessage.error {
-                    delegate?.route(ataMessage.method, failedWith: error)
+                if let ataMessage = message as? ATAReadSocketMessage,
+                   ataMessage.error.errorCode != 0 {
+                    delegate?.route(ataMessage.method, failedWith: ataMessage.error)
                 } else {
                     delegate?.didReceiveMessage(self, message: message)
                 }
