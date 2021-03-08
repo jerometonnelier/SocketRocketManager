@@ -1,5 +1,6 @@
 import UIKit
 import Starscream
+import Network
 
 // MARK: - Protocols
 public protocol SocketManagerDelegate: class {
@@ -86,6 +87,23 @@ public class SocketManager {
         case invalidUrl
         case invalidRoute
     }
+    private (set) var networkPath: NWPath?  {
+        didSet {
+            guard let path = networkPath else { return }
+            switch path.status {
+            case .satisfied:
+                if isConnected == false {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.reconnect()
+                    }
+                }
+                
+            default: ()
+            }
+        }
+    }
+    private let queue = DispatchQueue(label: "SocketMonitor")
+    private let monitor = NWPathMonitor()
     private var socket: WebSocket!
     private var clientIdentifier: UUID!
     private weak var delegate: SocketManagerDelegate!
@@ -105,6 +123,11 @@ public class SocketManager {
         self.clientIdentifier = clientIdentifier
         self.delegate = delegate
         self.handledTypes = handledTypes
+        
+        monitor.pathUpdateHandler = { [weak self] path in
+            self?.networkPath = path
+        }
+        monitor.start(queue: queue)
     }
     
     public func connect() {
@@ -142,6 +165,12 @@ public class SocketManager {
         guard isVerbose == true else { return }
         print("🧦 \(String(describing: message))")
     }
+    
+    func reconnect(after seconds: Double = 0) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
+            self?.connect()
+        }
+    }
 }
 
 extension SocketManager: WebSocketDelegate {
@@ -169,17 +198,36 @@ extension SocketManager: WebSocketDelegate {
         case .error(let error):
             log("Error - \(String(describing: error))")
             delegate.didReceiveError(error)
+            if let wsError = error as? Starscream.WSError {
+                switch (wsError.type, wsError.code) {
+                case (.securityError, 1): reconnect(after: 5)
+                default: ()
+                }
+            }
+            
+            if let httpError = error as? Starscream.HTTPUpgradeError {
+                switch httpError {
+                case .notAnUpgrade(200): reconnect(after: 5)
+                default: ()
+                }
+            }
             
         case .reconnectSuggested:
             log("reconnectSuggested")
             isConnected = false
-            socket.connect()
+            connect()
             
         case .cancelled:
             log("cancelled")
             isConnected = false
             
-        case .viabilityChanged: log("viabilityChanged")
+        case .viabilityChanged(let success):
+            log("viabilityChanged \(success)")
+            if success == true, isConnected == false {
+                connect()
+            }
+            isConnected = success
+            
         case .pong: log("pong")
         case .ping: log("ping")
         }
