@@ -7,7 +7,7 @@ public protocol SocketManagerDelegate: class {
     func socketDidConnect(_ socketManager: SocketManager)
     func socketDidDisconnect(_ socketManager: SocketManager, reason: String, code: UInt16)
     func didReceiveMessage(_ socketManager: SocketManager, message: SocketBaseMessage)
-    func route(_ route: SocketRoute, failedWith error: SocketErrorMessage)
+    func route(_ route: SocketRoute, failedWith error: SocketErrorMessage, message: ATAReadSocketMessage)
     func didReceiveError(_ error: Error?)
 }
 
@@ -147,7 +147,7 @@ public class SocketManager {
             if let message = try? decoder.decode(SocketType, from: data) {
                 if let ataMessage = message as? ATAReadSocketMessage,
                    ataMessage.error.errorCode != 0 {
-                    delegate?.route(ataMessage.method, failedWith: ataMessage.error)
+                    delegate?.route(ataMessage.method, failedWith: ataMessage.error, message: ataMessage)
                 } else {
                     delegate?.didReceiveMessage(self, message: message)
                 }
