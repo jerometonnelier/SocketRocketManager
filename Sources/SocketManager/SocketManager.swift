@@ -11,76 +11,6 @@ public protocol SocketManagerDelegate: class {
     func didReceiveError(_ error: Error?)
 }
 
-public typealias SocketRoute = String
-/// In order to handle custom message, please sublclass SocketMessage and use your own data
-open class SocketBaseMessage: Codable {
-}
-
-public struct SocketErrorMessage: Codable {
-    public let errorCode: Int
-    public let errorMessage: String
-}
-
-// MARK: - Messages
-open class ATAReadSocketMessage: ATAWriteSocketMessage {
-    public var error: SocketErrorMessage
-    public let id: Int
-    
-    public override init(id: Int,
-         route: SocketRoute) {
-        self.error = SocketErrorMessage(errorCode: 0, errorMessage: "")
-        self.id = id
-        super.init(id: id, route: route)
-    }
-    
-    enum CodingKeys: String, CodingKey {
-        case status
-        case id
-    }
-    
-    required public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(Int.self, forKey: .id)
-        error = try container.decode(SocketErrorMessage.self, forKey: .status)
-        try super.init(from: decoder)
-    }
-}
-
-open class ATAWriteSocketMessage: SocketBaseMessage {
-    public let method: SocketRoute
-    // use this to check the decoded method and test again the decoded value
-    open var checkMethod: SocketRoute? { nil }
-    
-    public init(id: Int,
-         route: SocketRoute) {
-        self.method = route
-        super.init()
-    }
-    
-    enum CodingKeys: String, CodingKey {
-        case id
-        case route = "method"
-    }
-    
-    required public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        //mandatory
-        method = try container.decode(String.self, forKey: .route)
-        try super.init(from: decoder)
-        
-        // check that the decoded values matches the expected value if provided
-        if let route = checkMethod,
-           route != method {
-            throw SocketManager.SMError.invalidRoute
-        }
-    }
-    
-    open override func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(method, forKey: .route)
-    }
-}
-
 // MARK: - SocketManager
 public class SocketManager {
     enum SMError: Error {
@@ -108,13 +38,22 @@ public class SocketManager {
     private var clientIdentifier: UUID!
     private weak var delegate: SocketManagerDelegate!
     private var handledTypes: [SocketBaseMessage.Type] = []
-    private(set) public var isConnected: Bool = false
+    public var isConnected: Bool { state == .connected }
+    // the timeout duration for message sending after which the socket will try to send a new message
+    public var timeout: Double = 10.0
+    private var timeOutData: [ATAWriteSocketMessage: (date: Date, retries: Int)] = [:]
     public var isVerbose: Bool = false
+    // the date at which the last package was went in order to delay at meast 10ms the sending of messages
+    private var lastSentPackage: Date = Date()
+    enum ConnectionState {
+        case disconnected, connecting, connected
+    }
+    private var state: ConnectionState = .disconnected
     
     public init(root: URL,
-         clientIdentifier: UUID,
-         delegate: SocketManagerDelegate,
-         handledTypes: [SocketBaseMessage.Type]) {
+                clientIdentifier: UUID,
+                delegate: SocketManagerDelegate,
+                handledTypes: [SocketBaseMessage.Type]) {
         var request = URLRequest(url: root)
         request.timeoutInterval = 30
         socket = WebSocket(request: request)
@@ -131,6 +70,7 @@ public class SocketManager {
     }
     
     public func connect() {
+        state = .connecting
         socket.connect()
     }
     
@@ -142,9 +82,10 @@ public class SocketManager {
     private let decoder: JSONDecoder = JSONDecoder()
     private let encoder: JSONEncoder = JSONEncoder()
     func handle(_ data: Data) {
-        log(String(data: data, encoding: .utf8))
+        log("Received Data \(String(data: data, encoding: .utf8) ?? "")")
         handledTypes.forEach { SocketType in
             if let message = try? decoder.decode(SocketType, from: data) {
+                removeObserver(for: message)
                 if let ataMessage = message as? ATAReadSocketMessage,
                    ataMessage.error.errorCode != 0 {
                     delegate?.route(ataMessage.method, failedWith: ataMessage.error, message: ataMessage)
@@ -155,13 +96,68 @@ public class SocketManager {
         }
     }
     
+    // concurrence queues https://medium.com/cubo-ai/concurrency-thread-safety-in-swift-5281535f7d3a
+    private let messageQueue = DispatchQueue(label: "sendQueue", attributes: .concurrent)
     public func send(_ message: SocketBaseMessage, completion: (() -> Void)? = nil) {
         guard let data = try? encoder.encode(message) else { return }
         log("Send \(String(data: data, encoding: .utf8) ?? "")")
-        socket.write(data: data, completion: completion)
+        // add a minimul delay of 10ms between each messages
+        let interval = Date().timeIntervalSince(lastSentPackage) / 100.0
+        let delay = interval <= 0.01 ? 0.01 : 0
+        lastSentPackage = Date().addingTimeInterval(0.001)
+        messageQueue.asyncAfter(deadline: .now() + delay, flags: .barrier) { [weak self] in
+            self?.socket.write(data: data, completion: completion)
+        }
+        
+        if let writeMsg = message as? ATAWriteSocketMessage, writeMsg.awaitsAnswer {
+            log("Observe response for \(message.id)")
+            timeOutData[writeMsg] = (date: Date(), retries: 0)
+            handleTimeout(for: writeMsg)
+        }
     }
     
-    func log(_ message: String?) {
+    private func handleTimeout(for message: ATAWriteSocketMessage) {
+        log("Handle timeout for \(message.id)")
+        // if the message received an answer, donc't handle
+        guard let data = timeOutData[message] else {
+            log("🍀 response already received for \(message.id)")
+            return
+        }
+        // if the message was already sent more than 1 time, thorw an error
+        guard data.retries < 1 else {
+            log("🔥 no response received for \(message.id), triggering an error")
+            delegate?.route(message.method, failedWith: SocketErrorMessage.retryFailed, message: ATAReadSocketMessage(id: message.id, route: message.method))
+            return
+        }
+        // otherwise, dispatch a second attempt after timeout``
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+            self?.retryToSend(message)
+        }
+    }
+    
+    private func retryToSend(_ message: ATAWriteSocketMessage) {
+        log("retry To Send for \(message.id)")
+        guard var data = timeOutData[message] else {
+            log("🍀 response already received for \(message.id)")
+            return
+        }
+        data.retries += 1
+        timeOutData[message] = data
+        handleTimeout(for: message)
+        send(message)
+    }
+    
+    private func removeObserver(for message: SocketBaseMessage) {
+        log("Remove oObserver for \(message.id)")
+        if let index = timeOutData.firstIndex(where: { $0.key.id == message.id }) {
+            log("🍀 removed")
+            timeOutData.remove(at: index)
+        } else {
+            log("🔥 no data found to remove")
+        }
+    }
+    
+    func log(_ message: String) {
         guard isVerbose == true else { return }
         print("🧦 \(String(describing: message))")
     }
@@ -178,12 +174,12 @@ extension SocketManager: WebSocketDelegate {
         switch event {
         case .connected(_):
             log("Connected")
-            isConnected = true
+            state = .connected
             delegate?.socketDidConnect(self)
             
         case .disconnected(let reason, let code):
             log("Disonnected \(reason)")
-            isConnected = false
+            state = .disconnected
             delegate?.socketDidDisconnect(self, reason: reason, code: code)
             
         case .text(let text):
@@ -214,19 +210,26 @@ extension SocketManager: WebSocketDelegate {
             
         case .reconnectSuggested:
             log("reconnectSuggested")
-            isConnected = false
+            state = .disconnected
             connect()
             
         case .cancelled:
             log("cancelled")
-            isConnected = false
+            state = .disconnected
+            // try to reconnect
+            messageQueue.asyncAfter(deadline: .now() + 5, flags: .barrier) { [weak self] in
+                self?.connect()
+            }
             
         case .viabilityChanged(let success):
             log("viabilityChanged \(success)")
-            if success == true, isConnected == false {
+            if success == true, state == .disconnected {
+                state = .connecting
                 connect()
             }
-            isConnected = success
+            if state != .connecting {
+                state = success ? .connected : .disconnected
+            }
             
         case .pong: log("pong")
         case .ping: log("ping")
