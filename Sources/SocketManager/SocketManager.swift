@@ -22,7 +22,7 @@ public class SocketManager {
             guard let path = networkPath else { return }
             switch path.status {
             case .satisfied:
-                if isConnected == false {
+                if isConnected == false, state != .connecting {
                     DispatchQueue.main.async { [weak self] in
                         self?.reconnect()
                     }
@@ -48,7 +48,7 @@ public class SocketManager {
     enum ConnectionState {
         case disconnected, connecting, connected
     }
-    private var state: ConnectionState = .disconnected
+    private(set) var state: ConnectionState = .disconnected
     
     public init(root: URL,
                 clientIdentifier: UUID,
