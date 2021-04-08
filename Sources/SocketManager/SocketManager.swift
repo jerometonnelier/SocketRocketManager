@@ -157,9 +157,10 @@ public class SocketManager {
         }
     }
     
+    public var logEmote: String = "🧦"
     func log(_ message: String) {
         guard isVerbose == true else { return }
-        print("🧦 \(String(describing: message))")
+        print("\(logEmote) \(String(describing: message))")
     }
     
     func reconnect(after seconds: Double = 0) {
