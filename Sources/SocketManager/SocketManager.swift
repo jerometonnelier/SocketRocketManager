@@ -50,6 +50,14 @@ public class SocketManager {
     }
     private(set) var state: ConnectionState = .disconnected
     
+    public func clearTimeOutData() {
+        timeOutData.removeAll()
+    }
+    public func clearTimeOutData(forRoute route: SocketRoute) {
+        guard let message = timeOutData.keys.filter({ $0.checkMethod == route }).first else { return }
+        timeOutData[message] = nil
+    }
+    
     public init(root: URL,
                 clientIdentifier: UUID,
                 delegate: SocketManagerDelegate,
