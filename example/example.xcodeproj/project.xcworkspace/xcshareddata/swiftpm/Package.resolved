@@ -2,15 +2,6 @@
   "object": {
     "pins": [
       {
-        "package": "SocketManager",
-        "repositoryURL": "https://github.com/jerometonnelier/SocketManager",
-        "state": {
-          "branch": "master",
-          "revision": "1bd2e0c3d7a2eeb6628d4d937f683e453dfa8996",
-          "version": null
-        }
-      },
-      {
         "package": "Starscream",
         "repositoryURL": "https://github.com/daltoniam/Starscream.git",
         "state": {

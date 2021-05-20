@@ -1,9 +1,10 @@
 import UIKit
 import Starscream
 import Network
+import Combine
 
 // MARK: - Protocols
-public protocol SocketManagerDelegate: class {
+public protocol SocketManagerDelegate: NSObjectProtocol {
     func socketDidConnect(_ socketManager: SocketManager)
     func socketDidDisconnect(_ socketManager: SocketManager, reason: String, code: UInt16)
     func didReceiveMessage(_ socketManager: SocketManager, message: SocketBaseMessage)
@@ -11,8 +12,14 @@ public protocol SocketManagerDelegate: class {
     func didReceiveError(_ error: Error?)
 }
 
+public struct RouteFailure {
+    public let route: SocketRoute
+    public let error: SocketErrorMessage
+    public let message: ATAReadSocketMessage
+}
+
 // MARK: - SocketManager
-public class SocketManager {
+public class SocketManager: ObservableObject {
     enum SMError: Error {
         case invalidUrl
         case invalidRoute
@@ -38,7 +45,6 @@ public class SocketManager {
     private var clientIdentifier: UUID!
     private weak var delegate: SocketManagerDelegate!
     private var handledTypes: [SocketBaseMessage.Type] = []
-    public var isConnected: Bool { state == .connected }
     // the timeout duration for message sending after which the socket will try to send a new message
     public var timeout: Double = 10.0
     private var timeOutData: [ATAWriteSocketMessage: (date: Date, retries: Int)] = [:]
@@ -48,7 +54,6 @@ public class SocketManager {
     enum ConnectionState {
         case disconnected, connecting, connected
     }
-    private(set) var state: ConnectionState = .disconnected
     
     public func clearTimeOutData() {
         timeOutData.removeAll()
@@ -58,6 +63,36 @@ public class SocketManager {
         timeOutData[message] = nil
     }
     
+    @Published private(set) var state: ConnectionState = .disconnected
+    @Published public var isConnected: Bool = false
+    // combine values
+    private var subscriptions = Set<AnyCancellable>()
+    public var useCombine: Bool = false  {
+        didSet {
+            if useCombine && subscriptions.isEmpty {
+                loadObservers()
+            } else if !useCombine && !subscriptions.isEmpty {
+                subscriptions.removeAll()
+            }
+        }
+    }
+    // errors
+    public var errorPublisher: AnyPublisher<Error?, Error> {
+        errorSubject.eraseToAnyPublisher()
+    }
+    private var errorSubject: PassthroughSubject<Error?, Error> = PassthroughSubject<Error?, Error>()
+    // messages
+    public var messagesPublisher: AnyPublisher<SocketBaseMessage, Error> {
+        messagesSubject.eraseToAnyPublisher()
+    }
+    private var messagesSubject: PassthroughSubject<SocketBaseMessage, Error> = PassthroughSubject<SocketBaseMessage, Error>()
+    // route fail
+    public var routeFailedPublisher: AnyPublisher<RouteFailure, Error> {
+        routeFailedSubject.eraseToAnyPublisher()
+    }
+    private var routeFailedSubject: PassthroughSubject<RouteFailure, Error> = PassthroughSubject<RouteFailure, Error>()
+    private var eventPublisher: PassthroughSubject<WebSocketEvent, Error> = PassthroughSubject<WebSocketEvent, Error>()
+
     public init(root: URL,
                 clientIdentifier: UUID,
                 delegate: SocketManagerDelegate,
@@ -71,10 +106,41 @@ public class SocketManager {
         self.delegate = delegate
         self.handledTypes = handledTypes
         
+        loadObservers()
+        // set the isConected published value
+        $state
+            .sink { [weak self] state in
+                self?.isConnected = state == .connected
+            }
+            .store(in: &subscriptions)
+        
         monitor.pathUpdateHandler = { [weak self] path in
             self?.networkPath = path
         }
         monitor.start(queue: queue)
+    }
+    
+    // Combine stuff
+    private func loadObservers() {
+    }
+    
+    public func publisher<T: SocketBaseMessage>() -> AnyPublisher<T, Error> {
+        eventPublisher
+            .compactMap { [weak self] event -> Data? in
+                switch event {
+                case .binary(let data): return data
+                case .text(let text):
+                    self?.log("Received - \(text)")
+                    if let data = text.data(using: .utf8) {
+                        return data
+                    }
+                    
+                default: ()
+                }
+                return nil
+            }
+            .decode(type: T.self, decoder: JSONDecoder())
+            .eraseToAnyPublisher()
     }
     
     public func connect() {
@@ -97,8 +163,14 @@ public class SocketManager {
                 if let ataMessage = message as? ATAReadSocketMessage,
                    ataMessage.error.errorCode != 0 {
                     delegate?.route(ataMessage.method, failedWith: ataMessage.error, message: ataMessage)
+                    if useCombine {
+                        routeFailedSubject.send(RouteFailure(route: ataMessage.method, error: ataMessage.error, message: ataMessage))
+                    }
                 } else {
                     delegate?.didReceiveMessage(self, message: message)
+                    if useCombine {
+                        messagesSubject.send(message)
+                    }
                 }
             }
         }
@@ -176,10 +248,15 @@ public class SocketManager {
             self?.connect()
         }
     }
+    
+    // MARK: - Combine
+//    private let
 }
 
 extension SocketManager: WebSocketDelegate {
     public func didReceive(event: WebSocketEvent, client: WebSocket) {
+        eventPublisher.send(event)
+        
         switch event {
         case .connected(_):
             log("Connected")
@@ -203,6 +280,9 @@ extension SocketManager: WebSocketDelegate {
         case .error(let error):
             log("Error - \(String(describing: error))")
             delegate.didReceiveError(error)
+            if useCombine {
+                errorSubject.send(error)
+            }
             if let wsError = error as? Starscream.WSError {
                 switch (wsError.type, wsError.code) {
                 case (.securityError, 1): reconnect(after: 5)
