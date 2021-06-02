@@ -254,7 +254,7 @@ public class SocketManager: ObservableObject {
 }
 
 extension SocketManager: WebSocketDelegate {
-    public func didReceive(event: WebSocketEvent, client: WebSocket) {
+    public func didReceive(event: WebSocketEvent, client: WebSocketClient) {
         eventPublisher.send(event)
         
         switch event {
@@ -292,7 +292,7 @@ extension SocketManager: WebSocketDelegate {
             
             if let httpError = error as? Starscream.HTTPUpgradeError {
                 switch httpError {
-                case .notAnUpgrade(200): reconnect(after: 5)
+                case .notAnUpgrade(200, _): reconnect(after: 5)
                 default: ()
                 }
             }
