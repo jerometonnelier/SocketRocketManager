@@ -1,6 +1,5 @@
 import UIKit
 import Starscream
-import Network
 import Combine
 
 // MARK: - Protocols
@@ -24,23 +23,6 @@ public class SocketManager: ObservableObject {
         case invalidUrl
         case invalidRoute
     }
-    private (set) var networkPath: NWPath?  {
-        didSet {
-            guard let path = networkPath else { return }
-            switch path.status {
-            case .satisfied:
-                if isConnected == false, state != .connecting {
-                    DispatchQueue.main.async { [weak self] in
-                        self?.reconnect()
-                    }
-                }
-                
-            default: ()
-            }
-        }
-    }
-    private let queue = DispatchQueue(label: "SocketMonitor")
-    private let monitor = NWPathMonitor()
     private var socket: WebSocket!
     private var clientIdentifier: UUID!
     private weak var delegate: SocketManagerDelegate!
@@ -52,7 +34,7 @@ public class SocketManager: ObservableObject {
     // the date at which the last package was went in order to delay at meast 10ms the sending of messages
     private var lastSentPackage: Date = Date()
     enum ConnectionState {
-        case disconnected, connecting, connected
+        case disconnecting, disconnected, connecting, connected
     }
     
     public func clearTimeOutData() {
@@ -106,6 +88,7 @@ public class SocketManager: ObservableObject {
         self.delegate = delegate
         self.handledTypes = handledTypes
         
+        handleLifeCycle()
         loadObservers()
         // set the isConected published value
         $state
@@ -113,11 +96,20 @@ public class SocketManager: ObservableObject {
                 self?.isConnected = state == .connected
             }
             .store(in: &subscriptions)
-        
-        monitor.pathUpdateHandler = { [weak self] path in
-            self?.networkPath = path
+    }
+    
+    private(set) public var appIsInForeground: Bool = true
+    private func handleLifeCycle() {
+        NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: nil) { [weak self] _ in
+            self?.appIsInForeground = false
+            self?.diconnect()
         }
-        monitor.start(queue: queue)
+        NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: nil) { [weak self] _ in
+            self?.appIsInForeground = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.connect()
+            }
+        }
     }
     
     // Combine stuff
@@ -144,11 +136,13 @@ public class SocketManager: ObservableObject {
     }
     
     public func connect() {
+        guard appIsInForeground, [.connecting, .connected].contains(state) == false else { return }
         state = .connecting
         socket.connect()
     }
     
     public func diconnect() {
+        state = .disconnecting
         socket.disconnect()
     }
     
