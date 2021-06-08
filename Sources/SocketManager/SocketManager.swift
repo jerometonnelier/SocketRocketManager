@@ -136,12 +136,15 @@ public class SocketManager: ObservableObject {
     }
     
     public func connect() {
+        log("CONNECT(🔌)")
         guard appIsInForeground, [.connecting, .connected].contains(state) == false else { return }
+        log("SEND CONNEXION MESSAGE 📧")
         state = .connecting
         socket.connect()
     }
     
     public func diconnect() {
+        log("DISCONNECTING")
         state = .disconnecting
         socket.disconnect()
     }
