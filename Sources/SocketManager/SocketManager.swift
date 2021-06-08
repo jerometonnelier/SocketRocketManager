@@ -102,7 +102,7 @@ public class SocketManager: ObservableObject {
     private func handleLifeCycle() {
         NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: nil) { [weak self] _ in
             self?.appIsInForeground = false
-            self?.diconnect()
+            self?.disconnect()
         }
         NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: nil) { [weak self] _ in
             self?.appIsInForeground = true
@@ -143,7 +143,7 @@ public class SocketManager: ObservableObject {
         socket.connect()
     }
     
-    public func diconnect() {
+    public func disconnect() {
         log("DISCONNECTING")
         state = .disconnecting
         socket.disconnect()
@@ -301,11 +301,13 @@ extension SocketManager: WebSocketDelegate {
             
         case .cancelled:
             log("cancelled")
-            state = .disconnected
-            // try to reconnect
-            messageQueue.asyncAfter(deadline: .now() + 5, flags: .barrier) { [weak self] in
-                self?.connect()
+            if state != .disconnecting {
+                // try to reconnect
+                messageQueue.asyncAfter(deadline: .now() + 5, flags: .barrier) { [weak self] in
+                    self?.connect()
+                }
             }
+            state = .disconnected
             
         case .viabilityChanged(let success):
             log("viabilityChanged \(success)")
