@@ -87,7 +87,7 @@ public class SocketManager: ObservableObject {
         self.clientIdentifier = clientIdentifier
         self.delegate = delegate
         self.handledTypes = handledTypes
-        
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
         handleLifeCycle()
         loadObservers()
         // set the isConected published value
