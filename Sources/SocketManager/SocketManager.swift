@@ -49,6 +49,7 @@ public class SocketManager: ObservableObject {
     @Published public var isConnected: Bool = false
     // combine values
     private var subscriptions = Set<AnyCancellable>()
+    private var pingSubscriptions = Set<AnyCancellable>()
     public var useCombine: Bool = false  {
         didSet {
             if useCombine && subscriptions.isEmpty {
@@ -100,16 +101,30 @@ public class SocketManager: ObservableObject {
     
     private(set) public var appIsInForeground: Bool = true
     private func handleLifeCycle() {
+        startPings()
+        
         NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: nil) { [weak self] _ in
             self?.appIsInForeground = false
             self?.disconnect()
+            self?.pingSubscriptions = []
         }
         NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: nil) { [weak self] _ in
             self?.appIsInForeground = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 self?.connect()
+                self?.startPings()
             }
         }
+    }
+    
+    private func startPings() {
+        Timer
+            .publish(every: 5, on: .main, in: .default)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.ping()
+            }
+            .store(in: &pingSubscriptions)
     }
     
     // Combine stuff
@@ -244,6 +259,11 @@ public class SocketManager: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
             self?.connect()
         }
+    }
+    
+    public func ping() {
+        guard isConnected else { return }
+        socket.write(ping: "Ping".data(using: .utf8)!)
     }
     
     // MARK: - Combine
