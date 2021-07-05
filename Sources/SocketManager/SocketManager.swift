@@ -75,6 +75,8 @@ public class SocketManager: ObservableObject {
     }
     private var routeFailedSubject: PassthroughSubject<RouteFailure, Error> = PassthroughSubject<RouteFailure, Error>()
     private var eventPublisher: PassthroughSubject<WebSocketEvent, Error> = PassthroughSubject<WebSocketEvent, Error>()
+    public var handleBackgroundMode: Bool = true
+    public var backgroundModeHandler: (() -> Void)?
 
     public init(root: URL,
                 clientIdentifier: UUID,
@@ -104,10 +106,16 @@ public class SocketManager: ObservableObject {
         startPings()
         
         NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: nil) { [weak self] _ in
-            self?.appIsInForeground = false
-            self?.disconnect()
-            self?.pingSubscriptions = []
+            guard let self = self else { return }
+            if self.handleBackgroundMode {
+                self.appIsInForeground = false
+                self.disconnect()
+                self.pingSubscriptions = []
+            } else {
+                self.backgroundModeHandler?()
+            }
         }
+        
         NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: nil) { [weak self] _ in
             self?.appIsInForeground = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
@@ -115,6 +123,12 @@ public class SocketManager: ObservableObject {
                 self?.startPings()
             }
         }
+    }
+    
+    public func socketDidlMoveToBackground() {
+        appIsInForeground = false
+        disconnect()
+        pingSubscriptions = []
     }
     
     private func startPings() {
