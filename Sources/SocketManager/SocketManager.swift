@@ -33,7 +33,7 @@ public class SocketManager: ObservableObject {
     public var isVerbose: Bool = false
     // the date at which the last package was went in order to delay at meast 10ms the sending of messages
     private var lastSentPackage: Date = Date()
-    enum ConnectionState {
+    public enum ConnectionState {
         case disconnecting, disconnected, connecting, connected
     }
     
@@ -75,8 +75,17 @@ public class SocketManager: ObservableObject {
     }
     private var routeFailedSubject: PassthroughSubject<RouteFailure, Error> = PassthroughSubject<RouteFailure, Error>()
     private var eventPublisher: PassthroughSubject<WebSocketEvent, Error> = PassthroughSubject<WebSocketEvent, Error>()
+    
+    // conf
     public var handleBackgroundMode: Bool = true
     public var backgroundModeHandler: (() -> Void)?
+    public var handleConnectedStateAutomatically: Bool = true
+    public var timerDuration: Double!  {
+        didSet {
+            startPings()
+        }
+    }
+
 
     public init(root: URL,
                 clientIdentifier: UUID,
@@ -91,11 +100,15 @@ public class SocketManager: ObservableObject {
         self.delegate = delegate
         self.handledTypes = handledTypes
         decoder.keyDecodingStrategy = .convertFromSnakeCase
+        if timerDuration == nil {
+            timerDuration = 30
+        }
         handleLifeCycle()
         loadObservers()
         // set the isConected published value
         $state
             .sink { [weak self] state in
+                self?.log("Change state to \(state) 🔋")
                 self?.isConnected = state == .connected
             }
             .store(in: &subscriptions)
@@ -132,8 +145,9 @@ public class SocketManager: ObservableObject {
     }
     
     private func startPings() {
+        pingSubscriptions.removeAll()
         Timer
-            .publish(every: 5, on: .main, in: .default)
+            .publish(every: timerDuration, on: .main, in: .default)
             .autoconnect()
             .sink { [weak self] _ in
                 self?.ping()
@@ -176,6 +190,10 @@ public class SocketManager: ObservableObject {
         log("DISCONNECTING")
         state = .disconnecting
         socket.disconnect()
+    }
+    
+    public func update(to state: ConnectionState) {
+        self.state = state
     }
     
     // send/receive messages
@@ -277,7 +295,8 @@ public class SocketManager: ObservableObject {
     
     public func ping() {
         guard isConnected else { return }
-        socket.write(ping: "Ping".data(using: .utf8)!)
+        log("send ping 🏓")
+        socket.write(ping: "".data(using: .utf8)!)
     }
     
     // MARK: - Combine
@@ -291,7 +310,9 @@ extension SocketManager: WebSocketDelegate {
         switch event {
         case .connected(_):
             log("Connected")
-            state = .connected
+            if handleConnectedStateAutomatically {
+                state = .connected
+            }
             delegate?.socketDidConnect(self)
             
         case .disconnected(let reason, let code):
