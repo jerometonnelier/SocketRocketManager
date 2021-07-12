@@ -28,7 +28,28 @@ public struct SocketErrorMessage: Codable {
 }
 
 // MARK: - Messages
-open class ATAReadSocketMessage: ATAWriteSocketMessage {
+open class ATAReadSocketMessage<T: Decodable>: ATAErrorSocketMessage {
+    /// this is the original message sent to the socket that is returned in cas of an error.
+    /// it might be needed sometimes
+    public var request: T?
+   
+    enum CodingKeys: String, CodingKey {
+        case request
+    }
+    
+    required public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try super.init(from: decoder)
+        do {
+            request = error.errorCode ==  0 ? nil : try container.decode(T.self, forKey: .request)
+        } catch {
+            print(error)
+            throw error
+        }
+    }
+}
+
+open class ATAErrorSocketMessage: ATAWriteSocketMessage {
     public var error: SocketErrorMessage
     
     public override init(id: Int,

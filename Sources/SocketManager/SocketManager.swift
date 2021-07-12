@@ -7,14 +7,14 @@ public protocol SocketManagerDelegate: NSObjectProtocol {
     func socketDidConnect(_ socketManager: SocketManager)
     func socketDidDisconnect(_ socketManager: SocketManager, reason: String, code: UInt16)
     func didReceiveMessage(_ socketManager: SocketManager, message: SocketBaseMessage)
-    func route(_ route: SocketRoute, failedWith error: SocketErrorMessage, message: ATAReadSocketMessage)
+    func route(_ route: SocketRoute, failedWith error: SocketErrorMessage, message: ATAErrorSocketMessage)
     func didReceiveError(_ error: Error?)
 }
 
 public struct RouteFailure {
     public let route: SocketRoute
     public let error: SocketErrorMessage
-    public let message: ATAReadSocketMessage
+    public let message: ATAErrorSocketMessage
 }
 
 // MARK: - SocketManager
@@ -204,7 +204,7 @@ public class SocketManager: ObservableObject {
         handledTypes.forEach { SocketType in
             if let message = try? decoder.decode(SocketType, from: data) {
                 removeObserver(for: message)
-                if let ataMessage = message as? ATAReadSocketMessage,
+                if let ataMessage = message as? ATAErrorSocketMessage,
                    ataMessage.error.errorCode != 0 {
                     delegate?.route(ataMessage.method, failedWith: ataMessage.error, message: ataMessage)
                     if useCombine {
@@ -250,7 +250,7 @@ public class SocketManager: ObservableObject {
         // if the message was already sent more than 1 time, thorw an error
         guard data.retries < 1 else {
             log("🔥 no response received for \(message.id), triggering an error")
-            delegate?.route(message.method, failedWith: SocketErrorMessage.retryFailed, message: ATAReadSocketMessage(id: message.id, route: message.method))
+            delegate?.route(message.method, failedWith: SocketErrorMessage.retryFailed, message: ATAErrorSocketMessage(id: message.id, route: message.method))
             return
         }
         // otherwise, dispatch a second attempt after timeout``
