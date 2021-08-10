@@ -222,13 +222,14 @@ public class SocketManager: ObservableObject {
     
     // concurrence queues https://medium.com/cubo-ai/concurrency-thread-safety-in-swift-5281535f7d3a
     private let messageQueue = DispatchQueue(label: "sendQueue", attributes: .concurrent)
+    private let minimumSendDelay: TimeInterval = 0.01
     public func send(_ message: SocketBaseMessage, completion: (() -> Void)? = nil) {
         guard let data = try? encoder.encode(message) else { return }
         log("Send \(String(data: data, encoding: .utf8) ?? "")")
         // add a minimul delay of 10ms between each messages
         let interval = Date().timeIntervalSince(lastSentPackage) / 100.0
-        let delay = interval <= 0.01 ? 0.01 : 0
-        lastSentPackage = Date().addingTimeInterval(0.001)
+        let delay = interval <= minimumSendDelay ? minimumSendDelay : 0
+        lastSentPackage = Date().addingTimeInterval(minimumSendDelay)
         messageQueue.asyncAfter(deadline: .now() + delay, flags: .barrier) { [weak self] in
             self?.socket.write(data: data, completion: completion)
         }
