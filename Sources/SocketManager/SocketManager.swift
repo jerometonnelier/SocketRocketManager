@@ -88,11 +88,13 @@ public class SocketManager: ObservableObject {
 
 
     public init(root: URL,
+                requestCompletion: ((inout URLRequest) -> Void)? = nil,
                 clientIdentifier: UUID,
                 delegate: SocketManagerDelegate,
                 handledTypes: [SocketBaseMessage.Type]) {
         var request = URLRequest(url: root)
         request.timeoutInterval = 30
+        requestCompletion?(&request)
         socket = WebSocket(request: request)
         socket.delegate = self
         encoder.outputFormatting = .prettyPrinted
