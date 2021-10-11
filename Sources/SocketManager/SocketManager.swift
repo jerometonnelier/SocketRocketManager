@@ -375,6 +375,10 @@ extension SocketManager: SRWebSocketDelegate {
     }
     
     public func webSocket(_ webSocket: SRWebSocket, didCloseWithCode code: Int, reason: String?, wasClean: Bool) {
+        guard code != SRStatusCode.codeGoingAway.rawValue else {
+            reconnect(after: 5)
+            return
+        }
         eventPublisher.send(.disconnected(reason, code))
         log("Disonnected \(reason ?? "")")
         state = .disconnected
