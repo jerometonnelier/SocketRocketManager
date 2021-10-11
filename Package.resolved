@@ -2,11 +2,11 @@
   "object": {
     "pins": [
       {
-        "package": "Starscream",
-        "repositoryURL": "https://github.com/daltoniam/Starscream.git",
+        "package": "SocketRocket",
+        "repositoryURL": "https://github.com/KAIMAN-iOS/SocketRocket",
         "state": {
-          "branch": "master",
-          "revision": "6f18c4938a8d0f615d113ee4213a9d3809e2d23f",
+          "branch": "spm-support",
+          "revision": "fe86ec01176ea3365ffa2d04a2bb6dd7a9e6c01e",
           "version": null
         }
       }

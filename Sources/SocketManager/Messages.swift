@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import Starscream
+//import Starscream
 import Network
 
 public typealias SocketRoute = String

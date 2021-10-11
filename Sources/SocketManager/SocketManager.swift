@@ -1,5 +1,5 @@
 import UIKit
-import Starscream
+import SocketRocket
 import Combine
 
 // MARK: - Protocols
@@ -17,13 +17,26 @@ public struct RouteFailure {
     public let message: ATAErrorSocketMessage
 }
 
+public enum WebSocketEvent {
+    case connected
+    case disconnected(String?, Int)
+    case text(String)
+    case binary(Data)
+    case pong(Data?)
+    case ping(Data?)
+    case error(Error?)
+    case viabilityChanged(Bool)
+    case reconnectSuggested(Bool)
+    case cancelled
+}
+
 // MARK: - SocketManager
-public class SocketManager: ObservableObject {
+public class SocketManager: NSObject, ObservableObject {
     enum SMError: Error {
         case invalidUrl
         case invalidRoute
     }
-    private var socket: WebSocket!
+    private var socket: SRWebSocket!
     private var clientIdentifier: UUID!
     private weak var delegate: SocketManagerDelegate!
     private var handledTypes: [SocketBaseMessage.Type] = []
@@ -86,16 +99,16 @@ public class SocketManager: ObservableObject {
         }
     }
 
-
     public init(root: URL,
                 requestCompletion: ((inout URLRequest) -> Void)? = nil,
                 clientIdentifier: UUID,
                 delegate: SocketManagerDelegate,
                 handledTypes: [SocketBaseMessage.Type]) {
+        super.init()
         var request = URLRequest(url: root)
         request.timeoutInterval = 30
         requestCompletion?(&request)
-        socket = WebSocket(request: request)
+        socket = SRWebSocket(url: root, protocols: request.allHTTPHeaderFields?.values.compactMap({ $0 }))
         socket.delegate = self
         encoder.outputFormatting = .prettyPrinted
         self.clientIdentifier = clientIdentifier
@@ -125,7 +138,7 @@ public class SocketManager: ObservableObject {
             if self.handleBackgroundMode {
                 self.appIsInForeground = false
                 self.disconnect()
-                self.pingSubscriptions = []
+                self.pingSubscriptions.removeAll()
             } else {
                 self.backgroundModeHandler?()
             }
@@ -143,7 +156,7 @@ public class SocketManager: ObservableObject {
     public func socketDidlMoveToBackground() {
         appIsInForeground = false
         disconnect()
-        pingSubscriptions = []
+        pingSubscriptions.removeAll()
     }
     
     private func startPings() {
@@ -185,13 +198,13 @@ public class SocketManager: ObservableObject {
         guard appIsInForeground, [.connecting, .connected].contains(state) == false else { return }
         log("SEND CONNEXION MESSAGE 📧")
         state = .connecting
-        socket.connect()
+        socket.open()
     }
     
     public func disconnect() {
         log("DISCONNECTING")
         state = .disconnecting
-        socket.disconnect()
+        socket.close()
     }
     
     public func update(to state: ConnectionState) {
@@ -225,7 +238,7 @@ public class SocketManager: ObservableObject {
     // concurrence queues https://medium.com/cubo-ai/concurrency-thread-safety-in-swift-5281535f7d3a
     private let messageQueue = DispatchQueue(label: "sendQueue", attributes: .concurrent)
     private let minimumSendDelay: TimeInterval = 0.01
-    public func send(_ message: SocketBaseMessage, completion: (() -> Void)? = nil) {
+    public func send(_ message: SocketBaseMessage) {
         guard let data = try? encoder.encode(message) else { return }
         log("Send \(String(data: data, encoding: .utf8) ?? "")")
         // add a minimul delay of 10ms between each messages
@@ -233,7 +246,7 @@ public class SocketManager: ObservableObject {
         let delay = interval <= minimumSendDelay ? minimumSendDelay : 0
         lastSentPackage = Date().addingTimeInterval(minimumSendDelay)
         messageQueue.asyncAfter(deadline: .now() + delay, flags: .barrier) { [weak self] in
-            self?.socket.write(data: data, completion: completion)
+            try? self?.socket.send(data: data)
         }
         
         if let writeMsg = message as? ATAWriteSocketMessage, writeMsg.awaitsAnswer {
@@ -299,86 +312,160 @@ public class SocketManager: ObservableObject {
     public func ping() {
         guard isConnected else { return }
         log("send ping 🏓")
-        socket.write(ping: "".data(using: .utf8)!)
+        try? socket.sendPing("".data(using: .utf8)!)
     }
     
     // MARK: - Combine
 //    private let
 }
 
-extension SocketManager: WebSocketDelegate {
-    public func didReceive(event: WebSocketEvent, client: WebSocketClient) {
-        eventPublisher.send(event)
-        
-        switch event {
-        case .connected(_):
-            log("Connected")
-            if handleConnectedStateAutomatically {
-                state = .connected
-            }
-            delegate?.socketDidConnect(self)
-            
-        case .disconnected(let reason, let code):
-            log("Disonnected \(reason)")
-            state = .disconnected
-            delegate?.socketDidDisconnect(self, reason: reason, code: code)
-            
-        case .text(let text):
-            log("Received - \(text)")
-            if let data = text.data(using: .utf8) {
-                handle(data)
-            }
-            
-        case .binary(let data):
+extension SocketManager: SRWebSocketDelegate {
+    public func webSocketDidOpen(_ webSocket: SRWebSocket) {
+        eventPublisher.send(.connected)
+        log("Connected")
+        if handleConnectedStateAutomatically {
+            state = .connected
+        }
+        delegate?.socketDidConnect(self)
+    }
+    
+    public func webSocket(_ webSocket: SRWebSocket, didReceiveMessage message: Any) {
+        switch message {
+        case is Data:
+            let data = message as! Data
+            eventPublisher.send(.binary(data))
             handle(data)
-            
-        case .error(let error):
-            log("Error - \(String(describing: error))")
-            delegate.didReceiveError(error)
-            if useCombine {
-                errorSubject.send(error)
-            }
-            if let wsError = error as? Starscream.WSError {
-                switch (wsError.type, wsError.code) {
-                case (.securityError, 1): reconnect(after: 5)
-                default: ()
-                }
-            }
-            
-            if let httpError = error as? Starscream.HTTPUpgradeError {
-                switch httpError {
-                case .notAnUpgrade(200, _): reconnect(after: 5)
-                default: ()
-                }
-            }
-            
-        case .reconnectSuggested:
-            log("reconnectSuggested")
-            state = .disconnected
-            connect()
-            
-        case .cancelled:
-            log("cancelled")
-            if state != .disconnecting {
-                // try to reconnect
-                messageQueue.asyncAfter(deadline: .now() + 5, flags: .barrier) { [weak self] in
-                    self?.connect()
-                }
-            }
-            state = .disconnected
-            
-        case .viabilityChanged(let success):
-            log("viabilityChanged \(success)")
-            if success == true, state == .disconnected {
-                state = .connecting
-                connect()
-            }
-            if state != .connecting {
-                state = success ? .connected : .disconnected
-            }
-            
-        case .pong: log("pong")
-        case .ping: log("ping")
+        case is String:
+            guard let data = (message as? String)?.data(using: .utf8) else { return }
+            eventPublisher.send(.binary(data))
+            handle(data)
+        default: ()
         }
     }
+    
+    public func webSocket(_ webSocket: SRWebSocket, didReceivePong pongData: Data?) {
+        eventPublisher.send(.pong(pongData))
+        log("pong")
+    }
+    
+    public func webSocket(_ webSocket: SRWebSocket, didReceiveMessageWith string: String) {
+        eventPublisher.send(.text(string))
+    }
+    
+    public func webSocket(_ webSocket: SRWebSocket, didFailWithError error: Error) {
+        eventPublisher.send(.error(error))
+        log("Error - \(String(describing: error))")
+        delegate.didReceiveError(error)
+        if useCombine {
+            errorSubject.send(error)
+        }
+//        if let wsError = error as? Starscream.WSError {
+//            switch (wsError.type, wsError.code) {
+//            case (.securityError, 1): reconnect(after: 5)
+//            default: ()
+//            }
+//        }
+//        
+//        if let httpError = error as? Starscream.HTTPUpgradeError {
+//            switch httpError {
+//            case .notAnUpgrade(200, _): reconnect(after: 5)
+//            default: ()
+//            }
+//        }
+    }
+    
+    public func webSocket(_ webSocket: SRWebSocket, didCloseWithCode code: Int, reason: String?, wasClean: Bool) {
+        eventPublisher.send(.disconnected(reason, code))
+        log("Disonnected \(reason ?? "")")
+        state = .disconnected
+        delegate?.socketDidDisconnect(self, reason: reason ?? "", code: UInt16(code))
+    }
+    
+    public func webSocket(_ webSocket: SRWebSocket, didReceivePingWith data: Data?) {
+        eventPublisher.send(.ping(data))
+        log("ping")
+    }
+    
+    public func webSocket(_ webSocket: SRWebSocket, didReceiveMessageWith data: Data) {
+        eventPublisher.send(.binary(data))
+        handle(data)
+    }
+    
+    public func webSocketShouldConvertTextFrameToString(_ webSocket: SRWebSocket) -> Bool {
+        true
+    }
 }
+//
+//extension SocketManager: WebSocketDelegate {
+//    public func didReceive(event: WebSocketEvent, client: WebSocketClient) {
+//        eventPublisher.send(event)
+//
+//        switch event {
+//        case .connected(_):
+//            log("Connected")
+//            if handleConnectedStateAutomatically {
+//                state = .connected
+//            }
+//            delegate?.socketDidConnect(self)
+//
+//        case .disconnected(let reason, let code):
+//
+//        case .text(let text):
+//            log("Received - \(text)")
+//            if let data = text.data(using: .utf8) {
+//                handle(data)
+//            }
+//
+//        case .binary(let data):
+//            handle(data)
+//
+//        case .error(let error):
+//            log("Error - \(String(describing: error))")
+//            delegate.didReceiveError(error)
+//            if useCombine {
+//                errorSubject.send(error)
+//            }
+//            if let wsError = error as? Starscream.WSError {
+//                switch (wsError.type, wsError.code) {
+//                case (.securityError, 1): reconnect(after: 5)
+//                default: ()
+//                }
+//            }
+//
+//            if let httpError = error as? Starscream.HTTPUpgradeError {
+//                switch httpError {
+//                case .notAnUpgrade(200, _): reconnect(after: 5)
+//                default: ()
+//                }
+//            }
+//
+//        case .reconnectSuggested:
+//            log("reconnectSuggested")
+//            state = .disconnected
+//            connect()
+//
+//        case .cancelled:
+//            log("cancelled")
+//            if state != .disconnecting {
+//                // try to reconnect
+//                messageQueue.asyncAfter(deadline: .now() + 5, flags: .barrier) { [weak self] in
+//                    self?.connect()
+//                }
+//            }
+//            state = .disconnected
+//
+//        case .viabilityChanged(let success):
+//            log("viabilityChanged \(success)")
+//            if success == true, state == .disconnected {
+//                state = .connecting
+//                connect()
+//            }
+//            if state != .connecting {
+//                state = success ? .connected : .disconnected
+//            }
+//
+//        case .pong: log("pong")
+//        case .ping: log("ping")
+//        }
+//    }
+//}

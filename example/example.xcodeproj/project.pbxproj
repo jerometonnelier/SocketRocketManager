@@ -7,16 +7,17 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C6149C0B271419C300043169 /* SocketManager in Frameworks */ = {isa = PBXBuildFile; productRef = C6149C0A271419C300043169 /* SocketManager */; };
 		C6A460AE2582640A0071D557 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6A460AD2582640A0071D557 /* AppDelegate.swift */; };
 		C6A460B02582640A0071D557 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6A460AF2582640A0071D557 /* SceneDelegate.swift */; };
 		C6A460B22582640A0071D557 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6A460B12582640A0071D557 /* ViewController.swift */; };
 		C6A460B52582640A0071D557 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = C6A460B32582640A0071D557 /* Main.storyboard */; };
 		C6A460B72582640D0071D557 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C6A460B62582640D0071D557 /* Assets.xcassets */; };
 		C6A460BA2582640D0071D557 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = C6A460B82582640D0071D557 /* LaunchScreen.storyboard */; };
-		C6A460C4258264B30071D557 /* SocketManager in Frameworks */ = {isa = PBXBuildFile; productRef = C6A460C3258264B30071D557 /* SocketManager */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		C6149C0C271419DF00043169 /* SocketRocketManager */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SocketRocketManager; path = ..; sourceTree = "<group>"; };
 		C6A460AA2582640A0071D557 /* example.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = example.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C6A460AD2582640A0071D557 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		C6A460AF2582640A0071D557 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -25,7 +26,6 @@
 		C6A460B62582640D0071D557 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C6A460B92582640D0071D557 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		C6A460BB2582640D0071D557 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		C6A460C6258264CA0071D557 /* SocketManager */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SocketManager; path = ..; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -33,19 +33,27 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C6A460C4258264B30071D557 /* SocketManager in Frameworks */,
+				C6149C0B271419C300043169 /* SocketManager in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		C6149C08271419A600043169 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		C6A460A12582640A0071D557 = {
 			isa = PBXGroup;
 			children = (
-				C6A460C6258264CA0071D557 /* SocketManager */,
+				C6149C0C271419DF00043169 /* SocketRocketManager */,
 				C6A460AC2582640A0071D557 /* example */,
 				C6A460AB2582640A0071D557 /* Products */,
+				C6149C08271419A600043169 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -88,7 +96,7 @@
 			);
 			name = example;
 			packageProductDependencies = (
-				C6A460C3258264B30071D557 /* SocketManager */,
+				C6149C0A271419C300043169 /* SocketManager */,
 			);
 			productName = example;
 			productReference = C6A460AA2582640A0071D557 /* example.app */;
@@ -118,7 +126,7 @@
 			);
 			mainGroup = C6A460A12582640A0071D557;
 			packageReferences = (
-				C6A460C2258264B30071D557 /* XCRemoteSwiftPackageReference "SocketManager" */,
+				C6149C09271419C300043169 /* XCRemoteSwiftPackageReference "SocketRocketManager" */,
 			);
 			productRefGroup = C6A460AB2582640A0071D557 /* Products */;
 			projectDirPath = "";
@@ -353,9 +361,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		C6A460C2258264B30071D557 /* XCRemoteSwiftPackageReference "SocketManager" */ = {
+		C6149C09271419C300043169 /* XCRemoteSwiftPackageReference "SocketRocketManager" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/jerometonnelier/SocketManager";
+			repositoryURL = "https://github.com/jerometonnelier/SocketRocketManager";
 			requirement = {
 				branch = master;
 				kind = branch;
@@ -364,9 +372,9 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		C6A460C3258264B30071D557 /* SocketManager */ = {
+		C6149C0A271419C300043169 /* SocketManager */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = C6A460C2258264B30071D557 /* XCRemoteSwiftPackageReference "SocketManager" */;
+			package = C6149C09271419C300043169 /* XCRemoteSwiftPackageReference "SocketRocketManager" */;
 			productName = SocketManager;
 		};
 /* End XCSwiftPackageProductDependency section */
